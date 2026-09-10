@@ -1,6 +1,6 @@
 # OpenSearch Dev Tools Cheatsheet
 
-A handy collection of everyday Dev Tools API commands for cluster monitoring, shard management, index templates, and manual snapshot operations.
+A collection of everyday Dev Tools API commands for cluster health inspection, shard management, index templates, manual snapshot operations, and restore testing.
 
 ---
 
@@ -32,7 +32,7 @@ GET _cluster/settings?pretty
 ```
 
 ### Update Maximum Shards per Node (Persistent)
-Useful when your cluster grows or you have many smaller indices:
+Useful when your cluster scales or you manage multiple time-series indices:
 ```json
 PUT _cluster/settings
 {
@@ -51,11 +51,11 @@ PUT _cluster/settings
 GET _index_template
 ```
 
-### Define Template for Web Portal Logs
+### Define Template for Application Logs
 ```json
-PUT _index_template/web-portal-logs
+PUT _index_template/application-logs-template
 {
-  "index_patterns": ["web-portal-*"],
+  "index_patterns": ["application-logs-*"],
   "template": {
     "settings": {
       "number_of_shards": 1,
@@ -65,11 +65,11 @@ PUT _index_template/web-portal-logs
 }
 ```
 
-### Define Template for Core API Logs
+### Define Template for Service Logs
 ```json
-PUT _index_template/core-api-logs
+PUT _index_template/service-logs-template
 {
-  "index_patterns": ["core-api-*"],
+  "index_patterns": ["service-logs-*"],
   "template": {
     "settings": {
       "number_of_shards": 1,
@@ -88,7 +88,7 @@ PUT _index_template/core-api-logs
 GET _snapshot
 ```
 
-### Inspect Specific Repository Status
+### Inspect Specific Repository Settings & Status
 ```json
 GET _snapshot/daily-snapshots
 ```
@@ -100,9 +100,9 @@ GET _snapshot/daily-snapshots/_all
 
 ### Trigger On-Demand Manual Snapshot
 ```json
-PUT _snapshot/daily-snapshots/manual-test-2026.09.10
+PUT _snapshot/daily-snapshots/manual-test-snapshot
 {
-  "indices": "web-portal-*,core-api-*",
+  "indices": "application-logs-*,service-logs-*",
   "ignore_unavailable": true,
   "include_global_state": false
 }
@@ -110,14 +110,14 @@ PUT _snapshot/daily-snapshots/manual-test-2026.09.10
 
 ### Delete a Specific Snapshot
 ```json
-DELETE _snapshot/daily-snapshots/manual-test-2026.09.10
+DELETE _snapshot/daily-snapshots/manual-test-snapshot
 ```
 
 ### Safe Restore (Renaming Indices to Avoid Collision)
 ```json
-POST _snapshot/daily-snapshots/manual-test-2026.09.10/_restore
+POST _snapshot/daily-snapshots/manual-test-snapshot/_restore
 {
-  "indices": "web-portal-2026.09.10",
+  "indices": "application-logs-2026.09.10",
   "rename_pattern": "(.+)",
   "rename_replacement": "$1_restored",
   "include_global_state": false

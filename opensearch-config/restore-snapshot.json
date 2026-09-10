@@ -1,5 +1,5 @@
 {
-  "indices": "web-portal-logs-2026.09.10",
+  "indices": "application-logs-2026.09.10",
   "rename_pattern": "(.+)",
   "rename_replacement": "$1_restored",
   "include_global_state": false

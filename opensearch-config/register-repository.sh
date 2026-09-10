@@ -26,8 +26,8 @@ awscurl -XPUT "${OPENSEARCH_ENDPOINT}/_snapshot/daily-snapshots" \
   }'
 echo ""
 
-echo "==> Registering Application Snapshots Repository: web-portal-snapshots..."
-awscurl -XPUT "${OPENSEARCH_ENDPOINT}/_snapshot/web-portal-snapshots" \
+echo "==> Registering Application Snapshots Repository: app-snapshots..."
+awscurl -XPUT "${OPENSEARCH_ENDPOINT}/_snapshot/app-snapshots" \
   --service es \
   --region "${AWS_REGION}" \
   -H "Content-Type: application/json" \
@@ -35,7 +35,7 @@ awscurl -XPUT "${OPENSEARCH_ENDPOINT}/_snapshot/web-portal-snapshots" \
     "type": "s3",
     "settings": {
       "bucket": "'"${S3_BUCKET}"'",
-      "base_path": "opensearch-snapshots/prod-cluster/web-portal",
+      "base_path": "opensearch-snapshots/prod-cluster/apps",
       "region": "'"${AWS_REGION}"'",
       "role_arn": "'"${ROLE_ARN}"'"
     }

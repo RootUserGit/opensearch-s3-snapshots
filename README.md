@@ -1,61 +1,37 @@
 # Amazon OpenSearch to S3 Snapshots: Automation & Disaster Recovery
 
-A production-ready guide, IAM policy templates, shell scripts, and configuration manifests for automating manual snapshots from **Amazon OpenSearch Service** into your own **customer-managed S3 bucket**.
+A production-ready guide, IAM policy templates, shell scripts, and configuration manifests for automating manual snapshots from **Amazon OpenSearch Service** into your own **customer-managed Amazon S3 bucket**.
+
+---
+
+## Architectural Overview
+
+### 1. End-to-End Traffic & Snapshot Flow
+The request flow travels from the execution client (EC2/Bastion) through OpenSearch's internal security layer, prompting the service principal to stream snapshot data directly into your designated S3 bucket:
+
+![OpenSearch to S3 Architecture](images/opensearch_s3_flow.jpg)
+
+### 2. Two-Layer Security Model (AWS IAM vs. OpenSearch FGAC)
+Understanding the division between cloud infrastructure permissions and database-internal authorization prevents the common 403 Forbidden error:
+
+![Two-Layer Security Model](images/opensearch_permissions_model.jpg)
 
 ---
 
 ## Why Use Customer-Managed S3 Snapshots?
 
-By default, Amazon OpenSearch Service takes hourly automated snapshots and retains them for 14 days. While helpful for short-term recovery, automated snapshots have major operational limitations:
+By default, Amazon OpenSearch Service takes hourly automated snapshots and retains them for 14 days. While helpful for immediate rollbacks, automated snapshots have critical operational constraints:
 
 1. **Storage Opacity:** Snapshots are stored in an AWS-managed S3 bucket that you cannot view, download, or directly interact with.
-2. **Hard Retention Limits:** You cannot retain snapshots beyond 14 days without paying full OpenSearch cluster storage prices.
-3. **Zero Portability:** You cannot directly export AWS-managed snapshots to another AWS account, another region, or a local environment for testing.
-4. **No Tiered Storage Savings:** You cannot apply S3 Lifecycle policies (e.g., transitioning older snapshots to S3 Standard-IA) to lower storage costs.
+2. **Hard Retention Limits:** You cannot retain automated snapshots beyond 14 days without paying full OpenSearch cluster storage prices.
+3. **Zero Portability:** You cannot directly export AWS-managed snapshots to another AWS account, another region, or an on-premise cluster for testing.
+4. **No Tiered Storage Savings:** You cannot apply [Amazon S3 Lifecycle Policies](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lifecycle-mgmt.html) (such as transitioning older snapshots to [S3 Standard-IA](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html)) to optimize long-term storage costs.
 
 By registering your own Amazon S3 bucket as a snapshot repository, you unlock:
 - **Long-term compliance archives:** Keep data for 30, 90, or 365+ days.
 - **Cross-account & cross-region DR:** Restore snapshots directly into a separate disaster recovery cluster or AWS account.
-- **Cost optimization:** Use S3 Lifecycle transitions (e.g. Standard to Standard-IA after 30 days).
+- **Cost optimization:** Use S3 Lifecycle transitions (e.g., Standard to Standard-IA after 30 days).
 - **Logical isolation:** Segment backup paths by cluster, environment, or microservice.
-
----
-
-## Architecture & End-to-End Flow
-
-```
-+-----------------------------------------------------------------------------------+
-| AWS Account                                                                       |
-|                                                                                   |
-|  +------------------+         Signed API Request          +--------------------+  |
-|  | EC2 / Bastion    | ----------------------------------> | Amazon OpenSearch  |  |
-|  | (awscurl / IAM)  |       (PUT _snapshot/my-repo)       | Domain             |  |
-|  +------------------+                                     +--------------------+  |
-|          |                                                          |             |
-|          | iam:PassRole                                             | sts:Assume  |
-|          v                                                          v             |
-|  +-----------------------------------------------------------------------------+  |
-|  | IAM Role: opensearch-s3-snapshot-role (Trusted: es.amazonaws.com)          |  |
-|  +-----------------------------------------------------------------------------+  |
-|                                         |                                         |
-|                                         | PutObject / GetObject / ListBucket      |
-|                                         v                                         |
-|                    +-----------------------------------------+                    |
-|                    | Customer S3 Bucket                      |                    |
-|                    | s3://my-opensearch-backup-bucket/       |                    |
-|                    |   └── opensearch-snapshots/             |                    |
-|                    |         └── prod-cluster/               |                    |
-|                    |               ├── daily/                |                    |
-|                    |               └── web-portal/           |                    |
-|                    +-----------------------------------------+                    |
-+-----------------------------------------------------------------------------------+
-```
-
-1. **OpenSearch assumes an IAM role** (`opensearch-s3-snapshot-role`) via the `es.amazonaws.com` service principal.
-2. **An administrator identity (EC2 role or developer IAM)** signs an API request (`awscurl`) to register the repository, passing the snapshot IAM role to OpenSearch.
-3. **OpenSearch checks internal security** (Fine-Grained Access Control). The caller's IAM ARN must be mapped to the `manage_snapshots` backend role.
-4. **OpenSearch writes snapshot segments** directly to the target S3 bucket under your specified `base_path`.
-5. **OpenSearch Snapshot Management (SM) plugin** automates recurring daily snapshots and enforces retention cleanup policies.
 
 ---
 
@@ -67,6 +43,9 @@ opensearch-s3-snapshots/
 ├── BLOG.md                                # Humanized, relatable engineering blog post
 ├── BLOG.html                              # Clean HTML blog ready to publish to CMS
 ├── dev-tools-cheatsheet.md                # Everyday OpenSearch Dev Tools commands
+├── images/
+│   ├── opensearch_s3_flow.jpg             # End-to-end cloud architecture diagram
+│   └── opensearch_permissions_model.jpg   # Two-layer security diagram (IAM vs FGAC)
 ├── iam-policies/
 │   ├── opensearch-s3-trust-policy.json    # Allows es.amazonaws.com to assume role
 │   ├── opensearch-s3-snapshot-policy.json # S3 bucket read/write/list permissions
@@ -83,10 +62,9 @@ opensearch-s3-snapshots/
 ## Step-by-Step Implementation Guide
 
 ### Step 1: Create the Dedicated S3 Bucket
-1. Create a dedicated bucket in the **same AWS Region** as your OpenSearch domain (e.g., `my-opensearch-backup-bucket`).
+1. Create a dedicated bucket in the **same AWS Region** as your OpenSearch domain (e.g., `my-opensearch-backup-bucket`). Keeping both in the same region ensures zero cross-region data transfer fees.
 2. Enable **Default Server-Side Encryption** (`SSE-S3` or `SSE-KMS`).
-3. Enable **Bucket Versioning** if desired, or leave disabled for standard snapshot storage.
-4. Add an **S3 Lifecycle Rule**:
+3. Add an [Amazon S3 Lifecycle Rule](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lifecycle-mgmt.html):
    - Transition objects under prefix `opensearch-snapshots/` to **S3 Standard-IA** after 30 days.
    - *Note:* Do not transition snapshots to S3 Glacier or Deep Archive if you expect OpenSearch to restore them on demand. OpenSearch requires real-time read access to snapshot metadata and data chunks.
 
@@ -107,7 +85,7 @@ OpenSearch needs permission to read and write snapshot artifacts in your S3 buck
      ]
    }
    ```
-3. Attach the custom inline policy from [`iam-policies/opensearch-s3-snapshot-policy.json`](./iam-policies/opensearch-s3-snapshot-policy.json) (replace bucket name with your actual S3 bucket):
+3. Attach the custom inline policy from [`iam-policies/opensearch-s3-snapshot-policy.json`](./iam-policies/opensearch-s3-snapshot-policy.json):
    ```json
    {
      "Version": "2012-10-17",
@@ -130,11 +108,9 @@ OpenSearch needs permission to read and write snapshot artifacts in your S3 buck
    ```
 
 ### Step 3: Grant Your Execution Role Permission to Pass the Role
-The identity that executes the repository registration (e.g. an EC2 instance profile, AWS SSM Session role, or developer IAM role) must be allowed to:
-- Call OpenSearch HTTP endpoints.
-- Pass the snapshot IAM role to the OpenSearch service.
+The identity that executes the repository registration (e.g. an EC2 instance profile, AWS SSM Session role, or developer IAM role) must be allowed to call OpenSearch HTTP endpoints and pass the snapshot role via [`iam:PassRole`](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_passrole.html).
 
-Attach [`iam-policies/ec2-pass-role-policy.json`](./iam-policies/ec2-pass-role-policy.json) to your execution role (replace account ID and domain):
+Attach [`iam-policies/ec2-pass-role-policy.json`](./iam-policies/ec2-pass-role-policy.json) to your execution role:
 ```json
 {
   "Version": "2012-10-17",
@@ -154,7 +130,7 @@ Attach [`iam-policies/ec2-pass-role-policy.json`](./iam-policies/ec2-pass-role-p
 ```
 
 ### Step 4: Map the Execution Role in OpenSearch Dashboards (The Critical Pitfall)
-If your OpenSearch domain has **Fine-Grained Access Control (FGAC)** enabled (standard for all production domains), IAM permissions alone are **not enough**. OpenSearch's internal security plugin will reject repository creation with:
+If your OpenSearch domain has [Fine-Grained Access Control (FGAC)](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/fgac.html) enabled, AWS IAM only authenticates your identity. The internal security plugin evaluates permissions inside the cluster. If unmapped, it returns:
 
 ```json
 {
@@ -179,13 +155,13 @@ If your OpenSearch domain has **Fine-Grained Access Control (FGAC)** enabled (st
 ### Step 5: Register the S3 Snapshot Repository
 Connect to your EC2 instance or local terminal authenticated with the execution role credentials.
 
-Install `awscurl` (handles AWS SigV4 request signing):
+Install `awscurl` (which handles [AWS Signature Version 4](https://docs.aws.amazon.com/general/latest/gr/signing_aws_api_requests.html) request signing):
 ```bash
 sudo yum install python3 python3-pip -y
 sudo pip3 install awscurl
 ```
 
-Execute the registration script or curl command:
+Execute the registration script:
 ```bash
 ./opensearch-config/register-repository.sh \
   "https://search-my-opensearch-domain-xxxxxx.us-east-1.es.amazonaws.com" \
@@ -204,7 +180,7 @@ awscurl -XGET "https://search-my-opensearch-domain-xxxxxx.us-east-1.es.amazonaws
 ---
 
 ### Step 6: Automate Daily Snapshots via Snapshot Management (SM)
-OpenSearch includes an integrated **Snapshot Management** plugin (OpenSearch ≥ 2.1) that handles automated scheduling and retention cleanup without requiring external Lambda functions or cron servers.
+OpenSearch includes an integrated [Snapshot Management (SM)](https://opensearch.org/docs/latest/tuning-your-cluster/availability-and-recovery/snapshots/snapshot-management/) plugin (OpenSearch ≥ 2.1) that handles automated scheduling and retention cleanup without requiring external Lambda functions or cron servers.
 
 Create the automated daily policy:
 ```bash
@@ -229,7 +205,7 @@ Before relying on backups, test an on-demand snapshot and restoration in a non-p
 ```json
 PUT _snapshot/daily-snapshots/manual-test-snapshot
 {
-  "indices": "web-portal-*",
+  "indices": "application-logs-*",
   "ignore_unavailable": true,
   "include_global_state": false
 }
@@ -239,7 +215,7 @@ PUT _snapshot/daily-snapshots/manual-test-snapshot
 ```json
 POST _snapshot/daily-snapshots/manual-test-snapshot/_restore
 {
-  "indices": "web-portal-*",
+  "indices": "application-logs-*",
   "rename_pattern": "(.+)",
   "rename_replacement": "$1_restored",
   "include_global_state": false
@@ -253,11 +229,12 @@ GET _cat/indices/*_restored?v
 
 ---
 
-## Troubleshooting Guide
+## Authoritative Documentation & References
 
-| Symptom | Root Cause | Solution |
-| :--- | :--- | :--- |
-| **`403 Forbidden: no permissions for [cluster:admin/repository/put]`** | The caller's IAM ARN is not mapped in OpenSearch security. | Add the caller's IAM role ARN to **Backend roles** under the `manage_snapshots` role in OpenSearch Dashboards. |
-| **`AmazonS3Exception: Access Denied (Status Code: 403)`** | Snapshot role missing S3 `ListBucket` or `PutObject` permissions, or path prefix mismatch. | Verify `Condition` prefix in [`opensearch-s3-snapshot-policy.json`](./iam-policies/opensearch-s3-snapshot-policy.json) matches the `base_path` in your repository registration. |
-| **`repository_verification_exception`** | Bucket is in a different region than declared in repository settings, or KMS key permissions missing. | Ensure the S3 bucket region matches the OpenSearch domain region, and specify `"region": "<region>"` in settings. |
-| **Restores are extremely slow or timing out** | Snapshot files were migrated to S3 Glacier or Glacier Deep Archive. | Exclude OpenSearch snapshot directories from deep archive lifecycle rules. Standard and Standard-IA are recommended. |
+- [Amazon OpenSearch Service Manual Snapshots Guide](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/managedomains-snapshots.html)
+- [OpenSearch Snapshot Management (SM) Documentation](https://opensearch.org/docs/latest/tuning-your-cluster/availability-and-recovery/snapshots/snapshot-management/)
+- [OpenSearch Fine-Grained Access Control (FGAC)](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/fgac.html)
+- [AWS IAM PassRole Best Practices](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_passrole.html)
+- [Amazon S3 Storage Classes & Lifecycle Management](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html)
+- [AWS Signature Version 4 (SigV4) Signing](https://docs.aws.amazon.com/general/latest/gr/signing_aws_api_requests.html)
+- [awscurl Open-Source CLI Tool](https://github.com/okigan/awscurl)

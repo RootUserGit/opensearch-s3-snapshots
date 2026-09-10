@@ -1,5 +1,5 @@
 {
-  "indices": "web-portal-logs-*,core-api-logs-*",
+  "indices": "application-logs-*,service-logs-*",
   "ignore_unavailable": true,
   "include_global_state": false
 }
