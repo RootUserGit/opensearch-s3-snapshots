@@ -41,7 +41,7 @@
     <p>To make this happen, three pieces must work together:</p>
     <ol>
       <li><strong>The Snapshot IAM Role:</strong> Trusted by the OpenSearch service (<code>es.amazonaws.com</code>) with read/write access to your S3 bucket.</li>
-      <li><strong>The Execution Role (Bastion or CI/CD):</strong> The identity making the signed HTTP request to register the repository. It needs permission to pass the snapshot role to OpenSearch via <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_passrole.html" target="_blank" rel="noopener noreferrer"><code>iam:PassRole</code></a>.</li>
+      <li><strong>The Bastion Host Execution Role:</strong> The EC2 identity making the signed HTTP request to register the repository. It needs permission to pass the snapshot role to OpenSearch via <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_passrole.html" target="_blank" rel="noopener noreferrer"><code>iam:PassRole</code></a>.</li>
       <li><strong>OpenSearch Internal Security:</strong> If your domain uses <a href="https://docs.aws.amazon.com/opensearch-service/latest/developerguide/fgac.html" target="_blank" rel="noopener noreferrer">Fine-Grained Access Control (FGAC)</a>, OpenSearch blocks your request unless your execution role ARN is mapped inside OpenSearch Dashboards.</li>
     </ol>
 
@@ -105,10 +105,14 @@
   ]
 }</code></pre>
 
-    <h3>2. Permissions for Your Execution Role (EC2 or Bastion)</h3>
+    <h3>2. Permissions for Your Bastion Host Execution Role</h3>
     <p>You cannot register snapshot repositories through the AWS web console. You must send an HTTP request to the OpenSearch cluster endpoint.</p>
 
-    <p>Whether you run this from an EC2 instance, AWS Systems Manager (SSM), or a local machine, that calling role needs access to OpenSearch and permission to pass the snapshot role:</p>
+    <p>In production VPC setups, you run this from an <strong>EC2 Bastion Host</strong> inside the same VPC (ideally connected via <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html" target="_blank" rel="noopener noreferrer">AWS Systems Manager Session Manager</a> with zero open inbound ports).</p>
+
+    <p><em>(Why not AWS CloudShell? CloudShell works for public clusters, but production domains live in private VPC subnets. Default CloudShell runs outside your VPC and cannot reach private endpoints. A private Bastion Host inside the VPC avoids network barriers.)</em></p>
+
+    <p>That calling role needs access to OpenSearch and permission to pass the snapshot role:</p>
 
     <pre><code>{
   "Version": "2012-10-17",
@@ -165,7 +169,7 @@
 
     <h2>Step 4: Register the S3 Repository with awscurl</h2>
 
-    <p>Because OpenSearch endpoints require <a href="https://docs.aws.amazon.com/general/latest/gr/signing_aws_api_requests.html" target="_blank" rel="noopener noreferrer">AWS Signature Version 4 (SigV4)</a> authentication, standard <code>curl</code> fails unless you pass signed headers.</p>
+    <p>Log into your EC2 Bastion Host. Because OpenSearch endpoints require <a href="https://docs.aws.amazon.com/general/latest/gr/signing_aws_api_requests.html" target="_blank" rel="noopener noreferrer">AWS Signature Version 4 (SigV4)</a> authentication, standard <code>curl</code> fails unless you pass signed headers.</p>
 
     <p>Use <a href="https://github.com/okigan/awscurl" target="_blank" rel="noopener noreferrer"><code>awscurl</code></a>, a lightweight tool that signs HTTP requests using your instance credentials:</p>
 

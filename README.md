@@ -153,7 +153,7 @@ If your OpenSearch domain has [Fine-Grained Access Control (FGAC)](https://docs.
 ---
 
 ### Step 5: Register the S3 Snapshot Repository
-Connect to your EC2 instance or local terminal authenticated with the execution role credentials.
+Connect to your **EC2 Bastion Host** (e.g. via AWS Systems Manager Session Manager).
 
 Install `awscurl` (which handles [AWS Signature Version 4](https://docs.aws.amazon.com/general/latest/gr/signing_aws_api_requests.html) request signing):
 ```bash
