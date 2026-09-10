@@ -1,4 +1,4 @@
-# Taking Control of Amazon OpenSearch Backups: Automating Snapshots to Your Own S3 Bucket
+# Why AWS Automated Snapshots Aren’t Enough: How to Automate OpenSearch Backups to Your Own S3 Bucket
 
 If you run [Amazon OpenSearch Service](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/what-is.html) in production, you probably know that AWS automatically takes hourly snapshots and keeps them for 14 days. On paper, that sounds like a solid backup plan. 
 
