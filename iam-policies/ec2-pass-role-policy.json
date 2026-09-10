@@ -1,0 +1,24 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "OpenSearchHttpAccess",
+      "Effect": "Allow",
+      "Action": [
+        "es:ESHttpPut",
+        "es:ESHttpGet",
+        "es:ESHttpPost"
+      ],
+      "Resource": [
+        "arn:aws:es:us-east-1:123456789012:domain/my-opensearch-cluster",
+        "arn:aws:es:us-east-1:123456789012:domain/my-opensearch-cluster/*"
+      ]
+    },
+    {
+      "Sid": "PassSnapshotRoleToOpenSearch",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::123456789012:role/opensearch-s3-snapshot-role"
+    }
+  ]
+}
