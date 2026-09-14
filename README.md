@@ -41,11 +41,11 @@ By registering your own Amazon S3 bucket as a snapshot repository, you unlock:
 opensearch-s3-snapshots/
 ├── README.md                              # Complete deployment guide & architecture
 ├── BLOG.md                                # Humanized, relatable engineering blog post
-├── BLOG.html                              # Clean HTML blog ready to publish to CMS
 ├── dev-tools-cheatsheet.md                # Everyday OpenSearch Dev Tools commands
 ├── images/
 │   ├── opensearch_s3_flow.jpg             # End-to-end cloud architecture diagram
 │   └── opensearch_permissions_model.jpg   # Two-layer security diagram (IAM vs FGAC)
+│   └── opensearch_roles_mapping.png       # opensearch roles mapping
 ├── iam-policies/
 │   ├── opensearch-s3-trust-policy.json    # Allows es.amazonaws.com to assume role
 │   ├── opensearch-s3-snapshot-policy.json # S3 bucket read/write/list permissions
