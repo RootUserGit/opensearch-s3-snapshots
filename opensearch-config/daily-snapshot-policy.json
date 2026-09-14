@@ -1,5 +1,5 @@
 {
-  "description": "Automated daily snapshot policy to customer-managed S3 bucket",
+  "description": "Daily automated snapshot policy to S3 with 7-day retention",
   "creation": {
     "schedule": {
       "cron": {
@@ -12,10 +12,12 @@
   "deletion": {
     "schedule": {
       "cron": {
-        "expression": "0 21 * * *"
+        "expression": "0 21 * * *",
+        "timezone": "UTC"
       }
     },
-    "delete_condition": {
+    "condition": {
+      "max_age": "7d",
       "max_count": 7,
       "min_count": 1
     },
@@ -25,6 +27,7 @@
     "repository": "daily-snapshots",
     "indices": "*",
     "date_format": "yyyy-MM-dd-HH-mm",
+    "timezone": "UTC",
     "include_global_state": true
   }
 }
